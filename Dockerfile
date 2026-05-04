@@ -7,11 +7,15 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY app/      ./app/
-COPY mock_data/ ./mock_data/
+COPY app/ ./app/
+
+# Create mock_data directory inside the image
+# The app auto-generates data on first run — no need to copy local files
+RUN mkdir -p mock_data
 
 # Non-root user for security
-RUN adduser --disabled-password --gecos "" appuser
+RUN adduser --disabled-password --gecos "" appuser && \
+    chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8501
