@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+# Force amd64 — compatible with AKS node pools
+FROM --platform=linux/amd64 python:3.11-slim
 
 WORKDIR /app
 

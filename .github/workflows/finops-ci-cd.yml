@@ -71,28 +71,22 @@ jobs:
           echo "version=${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "Image tag: ${SHORT_SHA}"
 
-      - name: Build Docker image
+      - name: Build and push
         run: |
-          IMAGE=${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}
-          SHORT_SHA=${{ steps.tag.outputs.version }}
+                IMAGE=${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}
+                SHA=${{ steps.tag.outputs.version }}
 
-          docker build \
-            -t ${IMAGE}:${SHORT_SHA} \
-            -t ${IMAGE}:latest \
-            .
+                # Force linux/amd64 — GitHub Actions runner is amd64,
+                # AKS nodes are amd64. Mac M1/M2 builds arm64 by default.
+                docker build \
+                  --platform linux/amd64 \
+                  -t ${IMAGE}:${SHA} \
+                  -t ${IMAGE}:latest \
+                  .
 
-          echo "✅ Built ${IMAGE}:${SHORT_SHA}"
-
-      - name: Push to ACR
-        run: |
-          IMAGE=${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}
-          SHORT_SHA=${{ steps.tag.outputs.version }}
-
-          docker push ${IMAGE}:${SHORT_SHA}
-          docker push ${IMAGE}:latest
-
-          echo "✅ Pushed ${IMAGE}:${SHORT_SHA}"
-          echo "✅ Pushed ${IMAGE}:latest"
+                docker push ${IMAGE}:${SHA}
+                docker push ${IMAGE}:latest
+                echo "✅ Pushed ${IMAGE}:${SHA} (linux/amd64)"
 
       - name: Verify image in ACR
         run: |
