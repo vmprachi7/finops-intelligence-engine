@@ -50,7 +50,7 @@ spec:
         - name: acr-secret          # allows AKS to pull from private ACR
       containers:
         - name: finops-engine
-          image: devopsplatformacr.azurecr.io/finops-engine:fd4792e
+          image: devopsplatformacr.azurecr.io/finops-engine:82eae18
           ports:
             - containerPort: 8501
               name: http
