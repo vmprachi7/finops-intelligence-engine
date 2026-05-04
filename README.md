@@ -13,24 +13,61 @@
 
 ---
 
-## Why build this instead of using Azure Defender for Cloud?
+## Why build this instead of using Azure's built-in tools?
 
-This is the first question anyone will ask. Here's the honest answer.
+This is the first question anyone will ask — and it's a fair one.
 
-Azure Defender for Cloud (and Cost Management's built-in alerts) exist and work.
-So why build a custom dashboard?
+Azure already gives you:
+- **Budget alerts** — email when your spend hits a threshold (e.g. $80 of $100)
+- **Cost Management dashboards** — view spend by service, resource group, date
+- **Defender for Cloud** — security recommendations + some cost insights (~$15/server/month)
 
-| | Azure Defender / Cost Management | This project |
-|---|---|---|
-| **Cost** | Defender for Cloud: ~$15/server/month | Free — runs as a pod in existing AKS cluster |
-| **AI recommendations** | Generic alerts: "your cost increased" | Specific: "your AKS node pool ran at 8% — switch to spot instances" |
-| **Customisation** | Fixed dashboards, fixed alert rules | Full control — threshold, lookback window, services to monitor |
-| **Context** | Isolated cost view | Correlates with your Prometheus metrics and Loki logs |
-| **Learning** | Black box | You understand every line — explainable anomaly detection |
-| **Portability** | Azure-only | Logic works on any cloud — swap cost_fetcher.py for AWS Cost Explorer |
+**So why build a custom tool?**
 
-**The real reason:** Azure's built-in tools tell you *that* something happened.
-This tool tells you *what to do about it* — in plain English, specific to your stack.
+### What Azure budget alerts actually do
+
+```
+Month-to-date spend hit $80 of your $100 budget.
+→ You get an email.
+```
+
+That's it. You know you're close to the limit. You don't know:
+- Which service caused the spike
+- Whether it's a one-off anomaly or a trend
+- Whether it happened yesterday or slowly over 3 weeks
+- What specifically to do about it
+
+### What this dashboard does differently
+
+```
+Azure Kubernetes Service spiked 280% on Apr 20
+($10.50 actual vs $3.50 expected 7-day baseline)
+
+AI recommendation:
+"Your AKS node pool ran at 8% CPU for 3 days.
+Switch non-critical workloads to spot instances —
+up to 80% saving. Run kubectl top pods to identify
+over-requested containers."
+```
+
+You know **which service**, **when**, **how much**, and **exactly what to do**.
+
+### Side-by-side comparison
+
+| | Azure Budget Alert | Azure Defender | This project |
+|---|---|---|---|
+| **"Am I near my limit?"** | ✅ | ✅ | ✅ |
+| **"Which service spiked?"** | ❌ | ⚠️ Basic | ✅ Per-service, per-day |
+| **"Is this anomalous?"** | ❌ | ❌ | ✅ Rolling baseline comparison |
+| **"What do I do about it?"** | ❌ | ⚠️ Generic | ✅ AI-specific to your stack |
+| **"When exactly did it spike?"** | ❌ | ❌ | ✅ Exact date + deviation % |
+| **Cost** | Free | ~$15/server/month | Free — runs in existing cluster |
+| **Customisable thresholds** | ❌ | ❌ | ✅ Via config |
+| **Portable to other clouds** | ❌ | ❌ | ✅ Swap cost_fetcher.py |
+
+**The one-line answer:**
+> Azure budget alerts tell you *that* you overspent.
+> This tells you *why* and *exactly what to do about it* — automatically, daily, before you hit the limit.
 
 For a Senior DevOps engineer, understanding how anomaly detection works and being able
 to extend it is more valuable than clicking through a vendor dashboard.
