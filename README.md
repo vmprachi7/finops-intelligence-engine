@@ -191,7 +191,7 @@ PYTHONPATH=. streamlit run app/main.py
 
 Open **http://localhost:8501**
 
-![alt text](terminal-running.png)
+![alt text](images/terminal-running.png)
 
 ### Step 6 — Run tests
 
