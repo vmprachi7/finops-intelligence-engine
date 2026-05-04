@@ -1,4 +1,4 @@
-# Force amd64 — compatible with AKS node pools
+# Force amd64 — required for AKS (Mac M1/M2 builds arm64 by default)
 FROM --platform=linux/amd64 python:3.11-slim
 
 WORKDIR /app
@@ -10,8 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY app/ ./app/
 
-# Create mock_data directory inside the image
-# The app auto-generates data on first run — no need to copy local files
+# Create mock_data directory — app auto-generates data on first run
 RUN mkdir -p mock_data
 
 # Non-root user for security
