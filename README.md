@@ -104,15 +104,13 @@ Azure Cost Management API (or mock data for local dev)
   main.py (Streamlit)     Dashboard: KPI metrics + charts + anomaly cards + AI panel
          │
          ▼
-  AKS (Phase 2)           Deployed as pod via ArgoCD GitOps
+  AKS (Phase 3)           Deployed as pod via ArgoCD GitOps
          │
          ▼
   devops-platform-foundation cluster
          ├── Prometheus scrapes finops pod metrics
          └── Grafana shows cost metrics alongside cluster metrics
 ```
-
-
 
 ---
 
@@ -144,13 +142,13 @@ finops-intelligence-engine/
 │   └── main.py              Streamlit dashboard
 ├── images/                  Screenshots for README
 ├── k8s/
-│   └── manifests.yaml       AKS deployment (Phase 2)
+│   └── manifests.yaml       AKS deployment manifests
 ├── mock_data/               Auto-generated test data (gitignored)
 ├── tests/
 │   └── test_anomaly_detector.py
 ├── .github/workflows/
 │   └── finops-ci-cd.yml     CI/CD pipeline
-├── Dockerfile
+├── Dockerfile               linux/arm64 — matches Standard_B2ps_v2 AKS node
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
@@ -205,7 +203,7 @@ Open `.env` and set your Groq key:
 
 ```bash
 GROQ_API_KEY=gsk_your-key-here
-USE_MOCK_DATA=true    # keeps this true — no Azure account needed locally
+USE_MOCK_DATA=true    # no Azure account needed locally
 ```
 
 Everything else can stay as default.
@@ -230,7 +228,6 @@ Open **http://localhost:8501**
 
 ![alt text](images/terminal-running.png)
 
-
 ### Step 6 — Run tests
 
 ```bash
@@ -246,6 +243,18 @@ Groq AI (Llama 3.1) will analyse the mock anomalies and return specific,
 actionable advice within 2–3 seconds.
 
 ![alt text](images/ai-recommendations.png)
+
+### Step 8 — Push to GitHub
+
+```bash
+# Verify .env is not being committed
+git check-ignore -v .env
+# Should output: .gitignore:2:.env   .env
+
+git add .
+git commit -m "feat: FinOps Intelligence Engine — local working version with Groq AI"
+git push origin main
+```
 
 ---
 
@@ -263,14 +272,12 @@ actionable advice within 2–3 seconds.
 
 ![alt text](images/kpi-metrics.png)
 
-
 ### Daily spend chart
 
 Stacked area chart showing spend per Azure service over 30 days.
 Critical anomaly dates are marked with red ✕ markers.
 
 ![alt text](images/area-chart.png)
-
 
 ### Anomaly cards
 
@@ -292,8 +299,6 @@ Not "your AKS cost increased." More like:
 "Your AKS node pool ran at 8% CPU utilisation for 3 days. Switch non-critical
 workloads to spot instances for up to 80% saving. Run kubectl top pods to
 identify over-requested containers."
-
-
 
 ---
 
@@ -326,95 +331,135 @@ Restart the dashboard — now showing real Azure costs.
 
 ---
 
-## Phase 3 — Deploy to AKS
+## Phase 3 — Deploy to AKS via GitOps
 
-### Prerequisites
+This project deploys to the same AKS cluster as
+[devops-platform-foundation](https://github.com/vmprachi7/devops-platform-foundation).
+Every push to `main` triggers the CI/CD pipeline — ArgoCD handles the rest.
 
-- Platform foundation cluster running (`devops-platform-aks`)
-- ACR provisioned (`devopsplatformacr`)
-- `kubectl` configured pointing at the cluster
+### Architecture note — ARM node
 
-### Step 1 — Build and push Docker image
+The AKS cluster uses `Standard_B2ps_v2` nodes which are ARM-based (Ampere Altra
+processor). The Docker image is built as `linux/arm64` to match. This is set in
+the `Dockerfile` and the GitHub Actions pipeline.
+
+### Step 1 — One-time cluster setup (run locally once)
+
+This creates the namespace and secrets in the cluster. Secrets are read from your
+environment variables — nothing is hardcoded or printed.
 
 ```bash
-az acr login --name devopsplatformacr
+# Ensure these are set in your shell (already in ~/.zshrc from platform setup)
+echo $ARM_CLIENT_ID
+echo $ARM_CLIENT_SECRET
+echo $ARM_TENANT_ID
+echo $ARM_SUBSCRIPTION_ID
+echo $GROQ_API_KEY   # add this if not already set
 
-docker build -t devopsplatformacr.azurecr.io/finops-engine:latest .
-docker push devopsplatformacr.azurecr.io/finops-engine:latest
+# Run setup script from repo root
+bash one-time-setup.sh
 ```
 
-### Step 2 — Create secrets in cluster
+The script:
+- Creates `finops-engine` namespace
+- Creates `acr-secret` (ACR image pull)
+- Creates `finops-secrets` (app credentials)
+- Registers this repo in ArgoCD
+- Applies the ArgoCD Application CRD
+- Adds OIDC federated credentials for the pipeline
+
+### Step 2 — Add GitHub Secrets
+
+Go to: **repo → Settings → Secrets and variables → Actions → New secret**
+
+| Secret | How to get it |
+|---|---|
+| `ARM_CLIENT_ID` | `az ad sp show --display-name terraform-sp --query appId -o tsv` |
+| `ARM_CLIENT_SECRET` | saved when SP was created |
+| `ARM_TENANT_ID` | `az account show --query tenantId -o tsv` |
+| `ARM_SUBSCRIPTION_ID` | `az account show --query id -o tsv` |
+| `GROQ_API_KEY` | from console.groq.com |
+
+### Step 3 — Add OIDC federated credentials in Entra ID
+
+Go to: **portal.azure.com → App registrations → terraform-sp →
+Certificates & secrets → Federated credentials → Add credential**
+
+Add three credentials:
+
+| Name | Entity type | Value |
+|---|---|---|
+| `github-finops-main` | Branch | `main` |
+| `github-finops-pr` | Pull request | — |
+| `github-finops-production` | Environment | `production` |
+
+### Step 4 — Push code to trigger deployment
 
 ```bash
-kubectl create namespace finops-engine
-
-kubectl create secret generic finops-secrets \
-  --namespace finops-engine \
-  --from-literal=AZURE_SUBSCRIPTION_ID=your-sub-id \
-  --from-literal=AZURE_TENANT_ID=your-tenant-id \
-  --from-literal=AZURE_CLIENT_ID=your-client-id \
-  --from-literal=AZURE_CLIENT_SECRET=your-client-secret \
-  --from-literal=GROQ_API_KEY=gsk_your-key
-```
-
-### Step 3 — Deploy via kubectl
-
-```bash
-kubectl apply -f k8s/manifests.yaml
-kubectl get pods -n finops-engine -w
-```
-
-### Step 4 — Access the dashboard
-
-```bash
-kubectl port-forward svc/finops-engine -n finops-engine 8080:80
-# Open: http://localhost:8080
-```
-
-### Step 5 — Register in ArgoCD (GitOps)
-
-In the platform repo, `gitops/argocd-apps/finops-engine.yaml` already
-points to this repo. Apply it once:
-
-```bash
-kubectl apply -f ../devops-platform-foundation/gitops/argocd-apps/finops-engine.yaml
-```
-
-After this, every push to `k8s/manifests.yaml` in this repo auto-deploys
-via ArgoCD. No manual kubectl needed.
-
-<!-- 📸 Add after AKS deployment -->
-
----
-
-## Push to GitHub
-
-```bash
-# From repo root
-cd finops-intelligence-engine
-
-# Check nothing sensitive is being committed
-git status
-# .env should NOT appear — it's in .gitignore
-# mock_data/sample_costs.json should NOT appear — it's in .gitignore
-
-# Stage everything
-git add .
-
-# First commit
-git commit -m "feat: FinOps Intelligence Engine — local working version with Groq AI"
-
-# Push
 git push origin main
 ```
 
-**Before pushing — verify your .gitignore is working:**
+The pipeline runs automatically:
+
+```
+git push
+    ↓
+Job 1: pytest (tests pass)
+    ↓
+Job 2: docker build (linux/arm64) → push to ACR
+    ↓
+Job 3: update image tag in k8s/manifests.yaml → commit back
+    ↓
+Job 4: ArgoCD sync → pod rolling update → verify Running
+```
+
+<!-- 📸 Screenshot: GitHub Actions showing all 4 jobs green -->
+
+### Step 5 — Verify deployment
 
 ```bash
-git check-ignore -v .env
-# Should output: .gitignore:2:.env   .env
-# If it doesn't output anything, your .env would be committed — stop and fix .gitignore first
+kubectl get pods -n finops-engine
+# Expected: finops-engine-xxxxx   1/1   Running
 ```
+
+<!-- 📸 Screenshot: kubectl get pods -n finops-engine showing 1/1 Running -->
+
+### Step 6 — Access the dashboard on AKS
+
+```bash
+kubectl port-forward svc/finops-engine -n finops-engine 8081:80
+# Open: http://localhost:8081
+```
+
+<!-- 📸 Screenshot: Dashboard running via AKS at localhost:8081 -->
+
+### Step 7 — Verify in ArgoCD
+
+```bash
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+# Open: https://localhost:8080
+# finops-engine should show: Synced + Healthy
+```
+
+<!-- 📸 Screenshot: ArgoCD UI showing finops-engine Synced + Healthy -->
+
+### Step 8 — Verify in Grafana
+
+```bash
+kubectl port-forward -n monitoring \
+  svc/kube-prometheus-stack-grafana 3000:80
+# Open: http://localhost:3000
+# Go to: Dashboards → Kubernetes/Compute Resources/Namespace
+# Select namespace: finops-engine
+```
+
+<!-- 📸 Screenshot: Grafana showing finops-engine pod CPU + memory -->
+
+### Secrets recreated automatically
+
+The pipeline recreates secrets on every deploy run — so if you destroy and
+recreate the cluster, the next `git push` restores everything automatically.
+No manual secret management after initial setup.
 
 ---
 
@@ -425,8 +470,9 @@ The pipeline in `.github/workflows/finops-ci-cd.yml`:
 | Job | Trigger | What it does |
 |---|---|---|
 | `test` | Every push + PR | Runs pytest with mock data |
-| `build-push` | Merge to main | Builds Docker image, pushes to ACR with short SHA tag |
-| `deploy` | Merge to main | Applies k8s manifests, updates image tag, waits for rollout |
+| `build-push` | Merge to main | Builds `linux/arm64` image via BuildKit, pushes to ACR |
+| `update-manifest` | After build | Updates image tag in `k8s/manifests.yaml`, commits back |
+| `argocd-sync` | After manifest update | Recreates secrets, syncs ArgoCD, verifies pod ready |
 
 ### Secrets required in GitHub
 
@@ -498,6 +544,13 @@ Custom thresholds, AI-generated specific advice, and full code ownership.
 Portable to any cloud by swapping `cost_fetcher.py`.
 Trade-off: requires maintenance; Defender is managed by Microsoft.
 
+### ADR-005: linux/arm64 image for Standard_B2ps_v2 node
+
+Standard_B2ps_v2 uses an Ampere Altra ARM processor (`p` = ARM in Azure naming).
+Building `linux/amd64` images causes `exec format error` at runtime.
+Solution: use `--platform=linux/arm64` in Dockerfile and BuildKit in CI/CD.
+Trade-off: arm64 images are less common — some base images may not have arm64 variants.
+
 ---
 
 ## Interview talking points
@@ -525,6 +578,12 @@ Trade-off: requires maintenance; Defender is managed by Microsoft.
 > Deployed via ArgoCD — I push a manifest change to GitHub and ArgoCD syncs
 > it automatically. The CI/CD pipeline builds the Docker image, pushes to ACR,
 > and updates the deployment. Zero manual kubectl."
+
+**On the ARM architecture issue:**
+> "I debugged an exec format error that turned out to be an architecture
+> mismatch — Standard_B2ps_v2 is ARM-based (Ampere Altra) but I was building
+> amd64 images. The fix was building linux/arm64 to match the node. This is
+> why you always verify node architecture before choosing a base image platform."
 
 ---
 

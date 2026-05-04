@@ -1,0 +1,111 @@
+name: Resource Audit
+
+on:
+  # Run every Sunday at 9:00 AM UTC
+  schedule:
+    - cron: '0 9 * * 0'
+
+  # Manual trigger — run anytime from Actions tab
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run — print report but do not create GitHub Issue'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write      # needed to create GitHub Issues
+
+jobs:
+
+  audit:
+    name: Azure Resource Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # OIDC login — no stored credentials
+      - name: Azure login
+        uses: azure/login@v3
+        with:
+          client-id:       ${{ secrets.ARM_CLIENT_ID }}
+          tenant-id:       ${{ secrets.ARM_TENANT_ID }}
+          subscription-id: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run resource audit
+        env:
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          AZURE_TENANT_ID:       ${{ secrets.ARM_TENANT_ID }}
+          AZURE_CLIENT_ID:       ${{ secrets.ARM_CLIENT_ID }}
+          AZURE_CLIENT_SECRET:   ${{ secrets.ARM_CLIENT_SECRET }}
+          GROQ_API_KEY:          ${{ secrets.GROQ_API_KEY }}
+        run: |
+          python app/resource_auditor.py
+          echo "✅ Audit complete"
+
+      - name: Read audit report
+        id: report
+        run: |
+          TITLE=$(python3 -c "import json; d=json.load(open('audit_report.json')); print(d['title'])")
+          echo "title=${TITLE}" >> $GITHUB_OUTPUT
+
+          # Write body to a file — avoids shell escaping issues with multiline
+          python3 -c "
+          import json
+          d = json.load(open('audit_report.json'))
+          with open('issue_body.md', 'w') as f:
+              f.write(d['body'])
+          "
+          echo "✅ Report loaded"
+
+      - name: Create GitHub Issue
+        if: ${{ !inputs.dry_run }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs    = require('fs');
+            const title = fs.readFileSync('audit_report.json', 'utf8');
+            const body  = fs.readFileSync('issue_body.md', 'utf8');
+            const data  = JSON.parse(title);
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              title: data.title,
+              body:  body,
+              labels: ['audit', 'automated', 'finops'],
+            });
+
+            console.log(`✅ Issue created: ${issue.data.html_url}`);
+            core.summary.addRaw(`## ✅ Audit Issue Created\n[${data.title}](${issue.data.html_url})`);
+            await core.summary.write();
+
+      - name: Print report (dry run)
+        if: ${{ inputs.dry_run }}
+        run: |
+          echo "=== DRY RUN — report not posted as Issue ==="
+          cat issue_body.md
+
+      - name: Upload audit report as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report-${{ github.run_number }}
+          path: |
+            audit_report.json
+            issue_body.md
+          retention-days: 90

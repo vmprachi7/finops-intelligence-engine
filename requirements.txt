@@ -4,6 +4,10 @@ plotly==5.19.0
 openai==1.30.0
 azure-identity==1.15.0
 azure-mgmt-costmanagement==4.0.1
+azure-mgmt-compute==30.3.0
+azure-mgmt-network==25.3.0
+azure-mgmt-resource==23.0.1
+azure-mgmt-containerregistry==10.3.0
 python-dotenv==1.0.1
 numpy==1.26.4
 requests==2.31.0
