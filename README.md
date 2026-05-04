@@ -230,6 +230,7 @@ Open **http://localhost:8501**
 
 ![alt text](images/terminal-running.png)
 
+
 ### Step 6 — Run tests
 
 ```bash
