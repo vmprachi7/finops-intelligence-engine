@@ -1,0 +1,31 @@
+# Secrets — never commit these
+.env
+*.pem
+*.key
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+.coverage
+
+# Generated mock data (reproducible, no need to commit)
+mock_data/sample_costs.json
+
+# Terraform (if added later)
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

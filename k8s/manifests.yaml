@@ -1,0 +1,151 @@
+---
+# ── Namespace ────────────────────────────────────────────────
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: finops-engine
+  labels:
+    app.kubernetes.io/managed-by: argocd
+    project: devops-platform
+
+---
+# ── ConfigMap — non-secret settings ─────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: finops-config
+  namespace: finops-engine
+data:
+  USE_MOCK_DATA:          "false"
+  LOOKBACK_DAYS:          "30"
+  ANOMALY_THRESHOLD_PCT:  "30"
+  DAILY_BUDGET_USD:       "10"
+  MONTHLY_BUDGET_USD:     "100"
+
+---
+# ── Secret — credentials (never commit real values) ──────────
+# Create this manually with kubectl:
+#
+#   kubectl create secret generic finops-secrets \
+#     --namespace finops-engine \
+#     --from-literal=AZURE_SUBSCRIPTION_ID=your-sub-id \
+#     --from-literal=AZURE_TENANT_ID=your-tenant-id \
+#     --from-literal=AZURE_CLIENT_ID=your-client-id \
+#     --from-literal=AZURE_CLIENT_SECRET=your-client-secret \
+#     --from-literal=ANTHROPIC_API_KEY=your-api-key
+#
+# This file is a reference only — the actual Secret is created
+# by the GitHub Actions pipeline, not from this file.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: finops-secrets
+  namespace: finops-engine
+type: Opaque
+stringData:
+  AZURE_SUBSCRIPTION_ID: "PLACEHOLDER"
+  AZURE_TENANT_ID:        "PLACEHOLDER"
+  AZURE_CLIENT_ID:        "PLACEHOLDER"
+  AZURE_CLIENT_SECRET:    "PLACEHOLDER"
+  ANTHROPIC_API_KEY:      "PLACEHOLDER"
+
+---
+# ── Deployment ───────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: finops-engine
+  namespace: finops-engine
+  labels:
+    app: finops-engine
+    version: v1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: finops-engine
+  template:
+    metadata:
+      labels:
+        app: finops-engine
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port:   "8501"
+    spec:
+      containers:
+        - name: finops-engine
+          image: devopsplatformacr.azurecr.io/finops-engine:latest
+          ports:
+            - containerPort: 8501
+              name: http
+          envFrom:
+            - configMapRef:
+                name: finops-config
+            - secretRef:
+                name: finops-secrets
+          resources:
+            requests:
+              cpu:    100m
+              memory: 256Mi
+            limits:
+              cpu:    500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+
+---
+# ── Service ──────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: finops-engine
+  namespace: finops-engine
+  labels:
+    app: finops-engine
+spec:
+  selector:
+    app: finops-engine
+  ports:
+    - name: http
+      port:       80
+      targetPort: 8501
+  type: ClusterIP
+
+---
+# ── ArgoCD Application — tells ArgoCD to watch this repo ─────
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: finops-engine
+  namespace: argocd
+  labels:
+    project: devops-platform
+spec:
+  project: default
+  source:
+    repoURL:        https://github.com/vmprachi7/finops-intelligence-engine
+    targetRevision: main
+    path:           k8s
+  destination:
+    server:    https://kubernetes.default.svc
+    namespace: finops-engine
+  syncPolicy:
+    automated:
+      prune:    true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
