@@ -1,0 +1,248 @@
+# FinOps Engine — Complete AKS Deployment Guide
+# Cluster is running, code is on GitHub, Docker needs installing
+# Follow steps in exact order
+
+# ═══════════════════════════════════════════════════════════
+# PHASE 1 — Install Docker on Mac (5 min)
+# ═══════════════════════════════════════════════════════════
+
+# Option A — Docker Desktop (recommended — has GUI)
+# 1. Go to https://www.docker.com/products/docker-desktop/
+# 2. Download "Docker Desktop for Mac"
+# 3. Open the .dmg, drag to Applications, open Docker Desktop
+# 4. Wait for the whale icon in menu bar to stop animating
+# 5. Verify:
+docker --version
+# Expected: Docker version 24.x.x
+
+# Option B — via Homebrew (no GUI)
+brew install --cask docker
+# Then open Docker from Applications to start the daemon
+
+# ═══════════════════════════════════════════════════════════
+# PHASE 2 — Verify cluster access
+# ═══════════════════════════════════════════════════════════
+
+# Confirm kubectl is pointing at your AKS cluster
+kubectl get nodes
+# Expected: aks-system-xxxxx   Ready   <none>   Xd   v1.34.x
+
+# Confirm ACR exists
+az acr show --name devopsplatformacr --query loginServer -o tsv
+# Expected: devopsplatformacr.azurecr.io
+
+# ═══════════════════════════════════════════════════════════
+# PHASE 3 — Build Docker image + push to ACR (10 min)
+# ═══════════════════════════════════════════════════════════
+
+# Step 1 — Go to finops repo
+cd finops-intelligence-engine
+
+# Step 2 — Login to ACR
+az acr login --name devopsplatformacr
+
+# Step 3 — Build image
+# This takes 3-5 minutes on first build (downloading base image)
+docker build -t devopsplatformacr.azurecr.io/finops-engine:v1.0.0 .
+docker tag devopsplatformacr.azurecr.io/finops-engine:v1.0.0 \
+           devopsplatformacr.azurecr.io/finops-engine:latest
+
+# Step 4 — Push to ACR
+docker push devopsplatformacr.azurecr.io/finops-engine:v1.0.0
+docker push devopsplatformacr.azurecr.io/finops-engine:latest
+
+# Step 5 — Verify image is in ACR
+az acr repository list --name devopsplatformacr --output table
+# Expected: finops-engine listed
+
+az acr repository show-tags \
+  --name devopsplatformacr \
+  --repository finops-engine \
+  --output table
+# Expected: latest, v1.0.0
+
+# ═══════════════════════════════════════════════════════════
+# PHASE 4 — Create namespace + secrets in AKS (5 min)
+# ═══════════════════════════════════════════════════════════
+
+# Step 1 — Create namespace
+kubectl create namespace finops-engine
+
+# Step 2 — Create ACR pull secret
+# AKS needs this to pull the image from ACR
+ACR_PASSWORD=$(az acr credential show \
+  --name devopsplatformacr \
+  --query passwords[0].value -o tsv)
+
+kubectl create secret docker-registry acr-secret \
+  --namespace finops-engine \
+  --docker-server=devopsplatformacr.azurecr.io \
+  --docker-username=devopsplatformacr \
+  --docker-password=$ACR_PASSWORD
+
+# Step 3 — Create app secrets (API keys + Azure credentials)
+kubectl create secret generic finops-secrets \
+  --namespace finops-engine \
+  --from-literal=GROQ_API_KEY=gsk_your-groq-key-here \
+  --from-literal=AZURE_SUBSCRIPTION_ID=your-sub-id \
+  --from-literal=AZURE_TENANT_ID=your-tenant-id \
+  --from-literal=AZURE_CLIENT_ID=your-sp-appId \
+  --from-literal=AZURE_CLIENT_SECRET=your-sp-password
+
+# Verify secrets created
+kubectl get secrets -n finops-engine
+# Expected: acr-secret and finops-secrets listed
+
+# ═══════════════════════════════════════════════════════════
+# PHASE 5 — Update k8s manifests + deploy (5 min)
+# ═══════════════════════════════════════════════════════════
+
+# Step 1 — Update k8s/manifests.yaml
+# Open k8s/manifests.yaml and make these changes:
+#
+# 1. In the Deployment, add imagePullSecrets:
+#    spec:
+#      imagePullSecrets:
+#        - name: acr-secret        ← ADD THIS
+#      containers:
+#        - name: finops-engine
+#
+# 2. In the ConfigMap, set USE_MOCK_DATA to false if you
+#    want real Azure cost data, or keep true for demo:
+#    data:
+#      USE_MOCK_DATA: "true"       ← keep true for demo
+#
+# 3. The secretRef already references finops-secrets ✅
+#    No change needed there
+
+# Step 2 — Apply manifests (skip ArgoCD Application for now)
+kubectl apply -f k8s/manifests.yaml
+
+# Watch pods come up
+kubectl get pods -n finops-engine -w
+# Expected within 60 seconds:
+# finops-engine-xxxxx   1/1   Running   0   60s
+
+# If pod stays in ImagePullBackOff — see troubleshooting below
+
+# Step 3 — Verify deployment
+kubectl get pods -n finops-engine
+kubectl get svc  -n finops-engine
+kubectl describe deployment finops-engine -n finops-engine
+
+# ═══════════════════════════════════════════════════════════
+# PHASE 6 — Access the dashboard (2 min)
+# ═══════════════════════════════════════════════════════════
+
+kubectl port-forward svc/finops-engine -n finops-engine 8080:80
+# Open: http://localhost:8080
+# You should see the full dashboard — same as local but running in AKS
+
+# ═══════════════════════════════════════════════════════════
+# PHASE 7 — Register with ArgoCD for GitOps (5 min)
+# ═══════════════════════════════════════════════════════════
+
+# Get ArgoCD password
+PASS=$(kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath="{.data.password}" | base64 -d)
+
+# Port-forward ArgoCD
+kubectl port-forward svc/argocd-server -n argocd 8090:443 &
+sleep 5
+
+# Login
+argocd login localhost:8090 --username admin --password "$PASS" --insecure
+
+# Register finops repo (public — no credentials needed)
+argocd repo add https://github.com/vmprachi7/finops-intelligence-engine
+
+# Apply the ArgoCD Application CRD
+# This tells ArgoCD to watch the finops repo's k8s/ folder
+kubectl apply -f k8s/manifests.yaml
+
+# Also apply the pointer from the platform repo
+kubectl apply -f \
+  ../devops-platform-foundation/gitops/argocd-apps/finops-engine.yaml
+
+# Check ArgoCD picked it up
+argocd app list
+# Expected:
+# NAME           STATUS  HEALTH   REPO
+# finops-engine  Synced  Healthy  https://github.com/vmprachi7/finops-intelligence-engine
+
+# Sync it
+argocd app sync finops-engine
+
+# ═══════════════════════════════════════════════════════════
+# PHASE 8 — Verify full GitOps loop
+# ═══════════════════════════════════════════════════════════
+
+# Make a small change to k8s/manifests.yaml
+# e.g. change LOOKBACK_DAYS from 30 to 30 (no actual change needed)
+# just to trigger a git push
+
+git add k8s/manifests.yaml
+git commit -m "test: verify ArgoCD GitOps loop"
+git push
+
+# Watch ArgoCD detect and sync within 3 minutes
+argocd app get finops-engine
+# STATUS should show Synced
+
+# ═══════════════════════════════════════════════════════════
+# TROUBLESHOOTING
+# ═══════════════════════════════════════════════════════════
+
+# ── Pod stuck in ImagePullBackOff ────────────────────────────
+kubectl describe pod -n finops-engine -l app=finops-engine
+# Look for "Failed to pull image" in Events
+
+# Fix: ACR pull secret not attached correctly
+# Check imagePullSecrets is in your Deployment spec
+kubectl get deployment finops-engine -n finops-engine -o yaml | grep -A5 imagePullSecrets
+
+# Fix: Re-create ACR secret if expired
+ACR_PASSWORD=$(az acr credential show --name devopsplatformacr --query passwords[0].value -o tsv)
+kubectl delete secret acr-secret -n finops-engine
+kubectl create secret docker-registry acr-secret \
+  --namespace finops-engine \
+  --docker-server=devopsplatformacr.azurecr.io \
+  --docker-username=devopsplatformacr \
+  --docker-password=$ACR_PASSWORD
+
+# ── Pod in CrashLoopBackOff ───────────────────────────────────
+kubectl logs -n finops-engine -l app=finops-engine --tail=50
+# Look for Python errors or missing env vars
+
+# ── Check secrets are mounted correctly ───────────────────────
+kubectl exec -n finops-engine \
+  $(kubectl get pod -n finops-engine -l app=finops-engine -o jsonpath='{.items[0].metadata.name}') \
+  -- env | grep -E "GROQ|AZURE|USE_MOCK"
+
+# ── Port-forward not working ──────────────────────────────────
+# Check pod is Running first
+kubectl get pods -n finops-engine
+# Then retry port-forward
+
+# ═══════════════════════════════════════════════════════════
+# SCREENSHOTS TO TAKE (while deployed)
+# ═══════════════════════════════════════════════════════════
+
+# 1. kubectl get pods -n finops-engine   → Running
+# 2. ArgoCD UI → finops-engine Synced + Healthy
+# 3. http://localhost:8080 → dashboard in browser
+#    (save as images/dashboard-aks.png)
+# 4. Grafana → Kubernetes/Compute Resources/Namespace
+#    Select namespace: finops-engine
+#    Shows CPU + memory of the running pod
+
+# ═══════════════════════════════════════════════════════════
+# TEARDOWN — when done working
+# ═══════════════════════════════════════════════════════════
+
+# Option A — just delete the finops namespace (keep cluster running)
+kubectl delete namespace finops-engine
+
+# Option B — destroy entire cluster (saves Azure credits)
+cd ../devops-platform-foundation/terraform/environments/dev
+terraform destroy -auto-approve

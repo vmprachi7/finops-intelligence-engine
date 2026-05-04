@@ -16,38 +16,11 @@ metadata:
   name: finops-config
   namespace: finops-engine
 data:
-  USE_MOCK_DATA:          "false"
+  USE_MOCK_DATA:          "true"    # set to "false" for real Azure costs
   LOOKBACK_DAYS:          "30"
   ANOMALY_THRESHOLD_PCT:  "30"
   DAILY_BUDGET_USD:       "10"
   MONTHLY_BUDGET_USD:     "100"
-
----
-# ── Secret — credentials (never commit real values) ──────────
-# Create this manually with kubectl:
-#
-#   kubectl create secret generic finops-secrets \
-#     --namespace finops-engine \
-#     --from-literal=AZURE_SUBSCRIPTION_ID=your-sub-id \
-#     --from-literal=AZURE_TENANT_ID=your-tenant-id \
-#     --from-literal=AZURE_CLIENT_ID=your-client-id \
-#     --from-literal=AZURE_CLIENT_SECRET=your-client-secret \
-#     --from-literal=ANTHROPIC_API_KEY=your-api-key
-#
-# This file is a reference only — the actual Secret is created
-# by the GitHub Actions pipeline, not from this file.
-apiVersion: v1
-kind: Secret
-metadata:
-  name: finops-secrets
-  namespace: finops-engine
-type: Opaque
-stringData:
-  AZURE_SUBSCRIPTION_ID: "PLACEHOLDER"
-  AZURE_TENANT_ID:        "PLACEHOLDER"
-  AZURE_CLIENT_ID:        "PLACEHOLDER"
-  AZURE_CLIENT_SECRET:    "PLACEHOLDER"
-  ANTHROPIC_API_KEY:      "PLACEHOLDER"
 
 ---
 # ── Deployment ───────────────────────────────────────────────
@@ -73,6 +46,8 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port:   "8501"
     spec:
+      imagePullSecrets:
+        - name: acr-secret          # allows AKS to pull from private ACR
       containers:
         - name: finops-engine
           image: devopsplatformacr.azurecr.io/finops-engine:latest
@@ -125,7 +100,7 @@ spec:
   type: ClusterIP
 
 ---
-# ── ArgoCD Application — tells ArgoCD to watch this repo ─────
+# ── ArgoCD Application ────────────────────────────────────────
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
