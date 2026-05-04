@@ -1,5 +1,5 @@
 # Force amd64 — required for AKS (Mac M1/M2 builds arm64 by default)
-FROM --platform=linux/amd64 python:3.11-slim
+FROM --platform=linux/arm64 python:3.11-slim
 
 WORKDIR /app
 
