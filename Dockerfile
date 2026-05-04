@@ -1,7 +1,10 @@
-# Force amd64 — required for AKS (Mac M1/M2 builds arm64 by default)
+# ARM64 — matches Standard_B2ps_v2 AKS node (Ampere Altra processor)
 FROM --platform=linux/arm64 python:3.11-slim
 
 WORKDIR /app
+
+# Set PYTHONPATH so 'from app import config' resolves correctly
+ENV PYTHONPATH=/app
 
 # Install dependencies first (layer cache)
 COPY requirements.txt .
