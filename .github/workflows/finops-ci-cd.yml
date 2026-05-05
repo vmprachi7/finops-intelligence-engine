@@ -107,6 +107,8 @@ jobs:
             echo "No changes"
           else
             git commit -m "ci: update image to ${{ needs.build-push.outputs.image-tag }} [skip ci]"
+            # Pull with rebase before pushing to handle concurrent commits
+            git pull --rebase origin main
             git push
           fi
 
