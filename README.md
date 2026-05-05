@@ -478,6 +478,71 @@ Free vs ~$15/server/month. AI-specific advice, portable to any cloud.
 `p` in B2ps_v2 = ARM processor. amd64 causes exec format error at runtime.
 
 ---
+## ⚠️ Security Notice — Groq API in Production
+
+This project uses [Groq's free tier](https://console.groq.com) for AI recommendations.
+This is appropriate for learning, portfolio projects, and internal tooling.
+
+**For production use, consider the following:**
+
+### What the concern is
+
+When you send cost data to Groq's API, that data leaves your environment and is
+processed by a third-party service. For most teams, cost anomaly summaries and
+resource names are not sensitive. But for organisations with strict data residency
+requirements or compliance obligations (SOC 2, ISO 27001, HIPAA), sending any
+cloud metadata to an external API may not be acceptable.
+
+### Production-ready alternatives
+
+| Option | How | Trade-off |
+|---|---|---|
+| **Azure OpenAI Service** | Deploy GPT-4o inside your Azure tenant — data never leaves your subscription | Costs money, requires Azure OpenAI access approval |
+| **Ollama (self-hosted)** | Run Llama 3.1 locally or on a VM inside your VNet | Free, fully private, but needs compute to run the model |
+| **Prompt filtering** | Strip resource names/IDs before sending to Groq — send only cost numbers and service types | Reduces context quality but keeps sensitive data local |
+| **Azure Private Endpoints** | If using Azure OpenAI, route all traffic through private endpoints | No public internet exposure |
+
+### Swapping providers — one line change
+
+The AI layer is intentionally provider-agnostic. Switching from Groq to
+Azure OpenAI is a single change in `app/config.py`:
+
+```python
+# Current (Groq — free tier)
+GROQ_API_KEY  = os.getenv("GROQ_API_KEY", "")
+AI_MODEL      = "llama-3.1-8b-instant"
+
+# Production (Azure OpenAI — data stays in your tenant)
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "")
+AZURE_OPENAI_KEY      = os.getenv("AZURE_OPENAI_KEY", "")
+AI_MODEL              = "gpt-4o"
+```
+
+And in `app/ai_advisor.py`:
+
+```python
+# Switch base_url to your Azure OpenAI endpoint
+client = OpenAI(
+    api_key=os.getenv("AZURE_OPENAI_KEY"),
+    base_url=f"{os.getenv('AZURE_OPENAI_ENDPOINT')}/openai/deployments/gpt-4o",
+    default_headers={"api-key": os.getenv("AZURE_OPENAI_KEY")},
+)
+```
+
+### Minimum recommended steps before going to production
+
+1. **Store the Groq API key in Azure Key Vault** — not as a plain Kubernetes Secret
+2. **Use External Secrets Operator** — sync Key Vault secrets into the cluster automatically
+3. **Review what's in the prompt** — the current prompt sends service names and cost amounts, not resource IDs or subscription details
+4. **Enable Groq's data privacy settings** — Groq offers options to opt out of training data usage in paid tiers
+
+> **Bottom line:** For a portfolio project or internal FinOps tool, Groq free tier
+> is perfectly reasonable. For a customer-facing or compliance-sensitive environment,
+> use Azure OpenAI Service with private endpoints and Key Vault secret management.
+
+---
+
+
 
 ## Interview talking points
 
