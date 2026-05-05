@@ -385,8 +385,9 @@ bash cleanup-test-resources.sh
 Creates a real GitHub Issue with all findings.
 
 <!-- 📸 SCREENSHOT 12 → images/audit-issue.png -->
-![alt text](images/audit-issue.png)
+[Visit issue](https://github.com/vmprachi7/finops-intelligence-engine/issues/5)
 
+![alt text](images/audit-issue.png)
 ---
 
 ## Phase 4 — Weekly Resource Auditor
