@@ -53,11 +53,14 @@ VM_PRICING = {
 
 # Right-size suggestions (current → recommended)
 VM_RIGHTSIZING = {
-    "Standard_D4s_v3":  ("Standard_D2s_v3",   70.08),
-    "Standard_D8s_v3":  ("Standard_D4s_v3",  140.16),
-    "Standard_D4as_v4": ("Standard_D2as_v4",  62.78),
-    "Standard_B4ms":    ("Standard_B2ms",      52.56),
-    "Standard_B2ms":    ("Standard_B2s",       30.37),
+    "Standard_D4s_v3":   ("Standard_D2s_v3",    70.08),
+    "Standard_D8s_v3":   ("Standard_D4s_v3",   140.16),
+    "Standard_D4as_v4":  ("Standard_D2as_v4",   62.78),
+    "Standard_D2as_v7":  ("Standard_D2alds_v7", 50.00),  # test VM
+    "Standard_D4as_v7":  ("Standard_D2as_v7",   96.00),
+    "Standard_B4ms":     ("Standard_B2ms",       52.56),
+    "Standard_B2ms":     ("Standard_B2s",        30.37),
+    "Standard_B2s":      ("Standard_B1s",         7.59),
 }
 
 # Thresholds for right-sizing
