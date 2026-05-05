@@ -31,6 +31,14 @@ from azure.mgmt.containerservice import ContainerServiceClient
 from openai import OpenAI
 
 
+# ── Mock metrics flag ────────────────────────────────────────
+# Set MOCK_METRICS=true to bypass Azure Monitor (no 7-day wait)
+# Simulates 8% avg CPU — triggers right-sizing recommendations
+USE_MOCK_METRICS = os.getenv("MOCK_METRICS", "false").lower() == "true"
+MOCK_CPU_PCT     = 8.2    # simulated avg CPU — well below 20% threshold
+MOCK_IOPS_PCT    = 7.5    # simulated avg IOPS — below 20% threshold
+MOCK_AKS_CPU     = 12.4   # simulated avg node CPU — below 30% threshold
+
 # ── Azure pricing (USD/month, approx) ────────────────────────
 DISK_COST_PER_GB        = 0.154   # Premium SSD per GB
 PUBLIC_IP_COST          = 3.65    # Unassigned static public IP
@@ -133,12 +141,28 @@ def get_credential():
 # ── Azure Monitor helpers ─────────────────────────────────────
 
 def get_avg_metric(
-    monitor: MonitorManagementClient,
+    monitor,
     resource_id: str,
     metric_name: str,
     days: int = 7,
 ) -> float:
-    """Get average metric value over last N days. Returns -1 if unavailable."""
+    """
+    Get average metric value over last N days.
+    Set MOCK_METRICS=true to skip Azure Monitor for testing.
+    Returns -1 if unavailable.
+    """
+    if USE_MOCK_METRICS:
+        import random
+        mapping = {
+            "Percentage CPU":             MOCK_CPU_PCT,
+            "node_cpu_usage_percentage":  MOCK_AKS_CPU,
+            "Disk Read Operations/Sec":   MOCK_IOPS_PCT,
+        }
+        base  = mapping.get(metric_name, 8.0)
+        value = round(base + random.uniform(-1.0, 1.0), 2)
+        print(f"      [MOCK] {metric_name}: {value:.1f}%")
+        return value
+
     try:
         end   = datetime.now(timezone.utc)
         start = end - timedelta(days=days)
