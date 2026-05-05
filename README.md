@@ -115,6 +115,9 @@ finops-intelligence-engine/
 ├── .github/workflows/
 │   ├── finops-ci-cd.yml       Build + deploy pipeline
 │   └── resource-audit.yml     Weekly cron auditor
+├── create-test-resources.sh   Creates orphaned + oversized VMs for auditor demo
+├── run-local-test.sh          Runs auditor locally with mock metrics
+├── cleanup-test-resources.sh  Deletes all test resources
 ├── Dockerfile                 linux/arm64 — Standard_B2ps_v2 node
 ├── requirements.txt
 └── .env.example
@@ -341,6 +344,51 @@ kubectl port-forward -n monitoring \
 
 ---
 
+## Testing the auditor
+
+Three scripts to create real Azure resources and verify the auditor works.
+
+### Create test resources
+
+```bash
+bash create-test-resources.sh
+```
+
+Creates in East US 2:
+- 2 unattached Premium disks (128GB + 256GB)
+- 1 unassigned public IP
+- 1 empty resource group
+- 1 stopped VM (deallocated)
+- 1 oversized running VM (`Standard_D2as_v7`)
+
+Total expected findings: ~$89/month
+
+### Run auditor locally
+
+```bash
+bash run-local-test.sh
+```
+
+Runs with `MOCK_METRICS=true` — simulates 8% avg CPU so right-sizing
+works immediately without waiting 7 days for Azure Monitor data.
+
+### Clean up
+
+```bash
+bash cleanup-test-resources.sh
+```
+
+### Run via GitHub Actions
+
+**Actions → Resource Audit → Run workflow → dry_run: false**
+
+Creates a real GitHub Issue with all findings.
+
+<!-- 📸 SCREENSHOT 12 → images/audit-issue.png -->
+![alt text](images/audit-issue.png)
+
+---
+
 ## Phase 4 — Weekly Resource Auditor
 
 Runs every Sunday at 9:00 AM UTC. Posts AI-prioritised report as a GitHub Issue.
@@ -368,9 +416,6 @@ Prints the report in logs. No Issue created.
 ### Run for real
 
 **Actions → Resource Audit → Run workflow → dry_run: false**
-
-<!-- 📸 SCREENSHOT 12 → images/audit-issue.png -->
-![alt text](images/audit-issue.png)
 
 ### What the Issue looks like
 
@@ -446,7 +491,7 @@ Free vs ~$15/server/month. AI-specific advice, portable to any cloud.
 > "The auditor pulls 7-day avg CPU from Azure Monitor. VMs below 20% get a specific smaller SKU recommendation with real pricing, not a generic suggestion."
 
 **On the audit trail:**
-> "Every Sunday a GitHub Issue is posted with AI-prioritised findings. Anyone can open the Issues tab and see the history. That's cost governance you can demonstrate."
+> "Every Sunday a GitHub Issue is posted with AI-prioritised findings — orphaned resources and right-sizing opportunities with real pricing. Anyone can open the Issues tab and see the history. That's cost governance you can demonstrate."
 
 **On ARM architecture:**
 > "Debugged exec format error — Standard_B2ps_v2 is ARM (p = ARM in Azure naming). Built linux/arm64 to match the node. Always verify node architecture before choosing image platform."
