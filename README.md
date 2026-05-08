@@ -385,9 +385,8 @@ bash cleanup-test-resources.sh
 Creates a real GitHub Issue with all findings.
 
 <!-- 📸 SCREENSHOT 12 → images/audit-issue.png -->
-[Visit issue](https://github.com/vmprachi7/finops-intelligence-engine/issues/5)
-
 ![alt text](images/audit-issue.png)
+
 ---
 
 ## Phase 4 — Weekly Resource Auditor
@@ -472,8 +471,8 @@ Transparent and tunable. Trade-off: misses slow-drift anomalies.
 ### ADR-003: Groq over OpenAI/Anthropic
 Completely free, no credit card, OpenAI-compatible API.
 
-### ADR-004: Custom dashboard over Azure Defender
-Free vs ~$15/server/month. AI-specific advice, portable to any cloud.
+### ADR-004: Custom dashboard over Azure Cost Management built-in alerts
+Azure Cost Management gives billing visibility and forecasting — it does those well. This adds anomaly detection with a rolling baseline, AI-specific advice, and automated weekly audits. Portable to any cloud.
 
 ### ADR-005: linux/arm64 for Standard_B2ps_v2
 `p` in B2ps_v2 = ARM processor. amd64 causes exec format error at runtime.
@@ -548,7 +547,7 @@ client = OpenAI(
 ## Interview talking points
 
 **On build decision:**
-> "Azure budget alerts tell you *that* you overspent. This tells you *why*, *what to do*, and runs a weekly audit for things you're paying for but not using."
+> "Azure Cost Management gives billing visibility and forecasting — it does those well. This adds what it lacks: automated anomaly detection with a rolling baseline, AI recommendations that say *what to do*, and a weekly audit for orphaned resources and oversized VMs."
 
 **On anomaly detection:**
 > "Rolling 7-day average — transparent, tunable, no ML model needed. For cost alerts, explainability matters more than sophistication."
