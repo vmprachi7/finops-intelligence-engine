@@ -3,7 +3,7 @@
 > Real-time Azure cost anomaly detection with AI-powered recommendations.
 > Detects spend spikes using rolling statistical analysis, then uses Groq AI (Llama 3.1)
 > to generate specific, actionable optimisation advice — not just alerts.
-> Built as a custom dashboard instead of Azure Defender for Cloud — here's why.
+> Built as a custom dashboard to extend Azure Cost Management — here's why.
 
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.32-FF4B4B?logo=streamlit)
@@ -43,7 +43,7 @@ up to 80% saving."
 
 ### Side-by-side comparison
 
-| | Azure Budget Alert | Azure Defender | This project |
+| | Azure Budget Alerts | Azure Cost Management | This project |
 |---|---|---|---|
 | **"Am I near my limit?"** | ✅ | ✅ | ✅ |
 | **"Which service spiked?"** | ❌ | ⚠️ Basic | ✅ Per-service, per-day |
