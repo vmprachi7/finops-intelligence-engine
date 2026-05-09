@@ -58,6 +58,25 @@ up to 80% saving."
 
 ---
 
+## Tech Stack
+
+| Layer | Technology | Why |
+|---|---|---|
+| **Dashboard** | Streamlit 1.32 | Zero frontend code, fast iteration, built for data viz |
+| **Backend API** | Python 3.11 | pandas, Azure SDK, asyncio — data wrangling native |
+| **Cost data** | Azure Cost Management API | Official source of truth; mock mode for testing |
+| **Anomaly detection** | Rolling 7-day average + threshold | Transparent, no ML training data, tunable via config |
+| **AI recommendations** | Groq (Llama 3.1) | Free tier, no credit card, OpenAI-compatible API |
+| **Container** | Docker linux/arm64 | Matches Azure Standard_B2ps_v2 (ARM nodes) |
+| **Orchestration** | Kubernetes (AKS) | Runs in existing devops-platform-foundation cluster |
+| **GitOps** | ArgoCD | Auto-deploys on push; audit trail via git history |
+| **Monitoring** | Prometheus + Grafana | Inherited from platform cluster; no extra setup |
+| **Scheduling** | GitHub Actions cron | Resource auditor runs weekly; serverless, no compute |
+| **Audit trail** | GitHub Issues | Automated AI-prioritised reports every Sunday |
+| **Secrets** | Azure Key Vault + External Secrets Operator | Recommended for production (not yet implemented) |
+
+---
+
 ## Three capabilities in one repo
 
 ```
@@ -472,7 +491,7 @@ Transparent and tunable. Trade-off: misses slow-drift anomalies.
 Completely free, no credit card, OpenAI-compatible API.
 
 ### ADR-004: Custom dashboard over Azure Cost Management built-in alerts
-Azure Cost Management gives billing visibility and forecasting — it does those well. This adds anomaly detection with a rolling baseline, AI-specific advice, and automated weekly audits. Portable to any cloud.
+Azure Cost Management gives billing visibility and forecasting — it does those well. This adds anomaly detection with a rolling baseline, AI-specific advice, and automated weekly audits. Portab[...]
 
 ### ADR-005: linux/arm64 for Standard_B2ps_v2
 `p` in B2ps_v2 = ARM processor. amd64 causes exec format error at runtime.
@@ -547,7 +566,7 @@ client = OpenAI(
 ## Interview talking points
 
 **On build decision:**
-> "Azure Cost Management gives billing visibility and forecasting — it does those well. This adds what it lacks: automated anomaly detection with a rolling baseline, AI recommendations that say *what to do*, and a weekly audit for orphaned resources and oversized VMs."
+> "Azure Cost Management gives billing visibility and forecasting — it does those well. This adds what it lacks: automated anomaly detection with a rolling baseline, AI recommendations that say[...]
 
 **On anomaly detection:**
 > "Rolling 7-day average — transparent, tunable, no ML model needed. For cost alerts, explainability matters more than sophistication."
@@ -556,7 +575,7 @@ client = OpenAI(
 > "The auditor pulls 7-day avg CPU from Azure Monitor. VMs below 20% get a specific smaller SKU recommendation with real pricing, not a generic suggestion."
 
 **On the audit trail:**
-> "Every Sunday a GitHub Issue is posted with AI-prioritised findings — orphaned resources and right-sizing opportunities with real pricing. Anyone can open the Issues tab and see the history. That's cost governance you can demonstrate."
+> "Every Sunday a GitHub Issue is posted with AI-prioritised findings — orphaned resources and right-sizing opportunities with real pricing. Anyone can open the Issues tab and see the history. [...]
 
 **On ARM architecture:**
 > "Debugged exec format error — Standard_B2ps_v2 is ARM (p = ARM in Azure naming). Built linux/arm64 to match the node. Always verify node architecture before choosing image platform."
