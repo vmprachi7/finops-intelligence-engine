@@ -3,7 +3,10 @@
 > Real-time Azure cost anomaly detection with AI-powered recommendations.
 > Detects spend spikes using rolling statistical analysis, then uses Groq AI (Llama 3.1)
 > to generate specific, actionable optimisation advice — not just alerts.
+> also audits resouses on weekly and generates reports.
 > Built as a custom dashboard to extend Azure Cost Management — here's why.
+
+here is sample RESOURCE AUDITOR Weekly scan [report](https://github.com/vmprachi7/finops-intelligence-engine/issues/8)
 
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.32-FF4B4B?logo=streamlit)
@@ -58,6 +61,15 @@ up to 80% saving."
 
 ---
 
+## Three capabilities in one repo
+
+```
+1. DASHBOARD        Real-time anomaly detection + AI recommendations
+2. RESOURCE AUDITOR Weekly scan — orphaned assets + right-sizing
+3. GITOPS DEPLOY    Pod in AKS, deployed via ArgoCD
+```
+---
+
 ## Tech Stack
 
 | Layer | Technology | Why |
@@ -74,16 +86,6 @@ up to 80% saving."
 | **Scheduling** | GitHub Actions cron | Resource auditor runs weekly; serverless, no compute |
 | **Audit trail** | GitHub Issues | Automated AI-prioritised reports every Sunday |
 | **Secrets** | Azure Key Vault + External Secrets Operator | Recommended for production (not yet implemented) |
-
----
-
-## Three capabilities in one repo
-
-```
-1. DASHBOARD        Real-time anomaly detection + AI recommendations
-2. RESOURCE AUDITOR Weekly scan — orphaned assets + right-sizing
-3. GITOPS DEPLOY    Pod in AKS, deployed via ArgoCD
-```
 
 ---
 
